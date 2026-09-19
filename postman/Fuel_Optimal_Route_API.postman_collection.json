@@ -1,0 +1,107 @@
+{
+  "info": {
+    "name": "Fuel-Optimal Route API",
+    "description": "Demo collection for the Django fuel-optimal route assessment API.\n\nBase URL: http://127.0.0.1:8000\n\nDemo order:\n1. Health check\n2. Optimize city-level route (Chicago → Dallas)\n3. Open map_url from the response in a browser\n4. Optional: lat/lng input and cache-hit re-request",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "routeId",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/health/",
+        "description": "Confirms the server is running. Expect 200 and {\"status\": \"ok\"}."
+      }
+    },
+    {
+      "name": "2. Optimize route (city-level text)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const body = pm.response.json();",
+              "    if (body.route_id) {",
+              "        pm.collectionVariables.set('routeId', String(body.route_id));",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Chicago, IL\",\n  \"finish\": \"Dallas, TX\",\n  \"start_full_tank\": true,\n  \"corridor_miles\": 5\n}"
+        },
+        "url": "{{baseUrl}}/api/routes/optimize/",
+        "description": "Main demo request. City-level inputs resolve via the local gazetteer (1 external ORS directions call on a cold request). Saves route_id for the map request."
+      }
+    },
+    {
+      "name": "3. Optimize route (lat/lng coords)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": {\"lat\": 41.8781, \"lng\": -87.6298},\n  \"finish\": {\"lat\": 32.7767, \"lng\": -96.7970},\n  \"start_full_tank\": true,\n  \"corridor_miles\": 5\n}"
+        },
+        "url": "{{baseUrl}}/api/routes/optimize/",
+        "description": "Same corridor using coordinates. Skips geocoding entirely; only needs a directions call if the route is not cached."
+      }
+    },
+    {
+      "name": "4. Re-request same route (cache hit)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Chicago, IL\",\n  \"finish\": \"Dallas, TX\",\n  \"start_full_tank\": true,\n  \"corridor_miles\": 5\n}"
+        },
+        "url": "{{baseUrl}}/api/routes/optimize/",
+        "description": "Identical to request 2. Should be faster and make zero ORS calls (route + city resolution already cached/local)."
+      }
+    },
+    {
+      "name": "5. Open route map page",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/routes/{{routeId}}/map/",
+        "description": "HTML Leaflet map for the route_id from request 2. Better opened in a browser: copy map_url from the optimize response."
+      }
+    }
+  ]
+}

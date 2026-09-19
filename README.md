@@ -8,7 +8,7 @@ Django REST API that plans a driving route between two USA locations and selects
 - One directions call per unique route (results cached in SQLite)
 - Match nearby truck stops from the provided OPIS fuel-price CSV
 - Greedy min-cost refueling algorithm (provably optimal for known prices)
-- GeoJSON response + interactive **Leaflet / OpenStreetMap** map page
+- GeoJSON response + interactive **Leaflet** map page (Esri street basemap; HeiGIT key is for routing/geocoding only)
 - Offline fuel-stop geocoding via a bundled **GeoNames** US cities gazetteer (CC0)
 
 ## Requirements
@@ -119,7 +119,9 @@ python manage.py runserver
 
 ### `GET /api/routes/{id}/map/`
 
-HTML page with Leaflet + OSM tiles showing the route polyline and planned fuel stops.
+HTML page with Leaflet + Esri World Street Map tiles showing the route polyline and planned fuel stops.
+
+Basemap tiles do **not** use `ORS_API_KEY` — HeiGIT/ORS covers geocoding and directions only. The map page loads free Esri tiles in the browser (no extra key).
 
 ## Example curl
 
@@ -162,6 +164,7 @@ This is the standard optimal strategy for the single-tank, known-prices gas-stat
 |---------|------|---------------------------|
 | Geocoding | `api.heigit.org/pelias/v1` | 0 for city-level `"City, ST"` (bundled gazetteer); 0–2 for specific street addresses (cached) |
 | Directions | `api.heigit.org/openrouteservice/v2/directions/driving-car/geojson` | 0–1 (cached) |
+| Map basemap tiles | Esri World Street Map (browser only) | Not counted as ORS calls; no API key |
 
 City-level start/finish (e.g. `"Chicago, IL"`) resolve from the bundled
 GeoNames gazetteer in memory, so a cold city-level request makes **1** external

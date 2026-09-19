@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 
 from django.conf import settings
@@ -277,8 +276,15 @@ def route_map(request, pk: int):
     )
 
     context = {
-        "route_json": json.dumps(geometry),
-        "stops_json": json.dumps(result["fuel_stops"]),
+        # Pass Python objects; template uses |json_script for safe embedding.
+        "route_data": geometry,
+        "stops_data": result["fuel_stops"],
+        "map_meta": {
+            "start_lat": route.start_lat,
+            "start_lng": route.start_lng,
+            "finish_lat": route.finish_lat,
+            "finish_lng": route.finish_lng,
+        },
         "stop_count": len(result["fuel_stops"]),
         "start_text": route.start_text or "Start",
         "finish_text": route.finish_text or "Finish",
@@ -287,9 +293,5 @@ def route_map(request, pk: int):
         "total_gallons": f"{result['total_gallons']:.2f}",
         "feasible": result["feasible"],
         "reason": result.get("reason") or "",
-        "start_lat": route.start_lat,
-        "start_lng": route.start_lng,
-        "finish_lat": route.finish_lat,
-        "finish_lng": route.finish_lng,
     }
     return render(request, "routes/map.html", context)

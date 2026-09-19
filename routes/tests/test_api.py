@@ -173,7 +173,7 @@ class OptimizeAPITests(TestCase):
         resp = self.client.get(f"/api/routes/{route_id}/map/")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"leaflet", resp.content.lower())
-        self.assertIn(b"openstreetmap", resp.content.lower())
+        self.assertIn(b"arcgisonline", resp.content.lower())
 
     @patch("routes.views.directions")
     @patch("routes.views.geocode")
