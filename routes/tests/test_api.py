@@ -71,15 +71,15 @@ class OptimizeAPITests(TestCase):
         self.assertIn("route_id", body)
         self.assertTrue(body["assumptions"]["start_full_tank"])
 
-        # Geocode + directions called once each pair / once
-        self.assertEqual(mock_geocode.call_count, 2)
+        # City-level inputs resolve via the bundled gazetteer -> no ORS geocode.
+        self.assertEqual(mock_geocode.call_count, 0)
         self.assertEqual(mock_directions.call_count, 1)
 
-        # Caches populated
-        self.assertEqual(GeocodeCache.objects.count(), 2)
+        # Gazetteer hits are not written to GeocodeCache (ORS-only); route is cached.
+        self.assertEqual(GeocodeCache.objects.count(), 0)
         self.assertEqual(RouteCache.objects.count(), 1)
 
-        # Second identical request should hit cache — no new ORS calls
+        # Second identical request hits the route cache — still no ORS calls.
         resp2 = self.client.post(
             "/api/routes/optimize/",
             {
@@ -91,7 +91,7 @@ class OptimizeAPITests(TestCase):
             format="json",
         )
         self.assertEqual(resp2.status_code, 200)
-        self.assertEqual(mock_geocode.call_count, 2)  # unchanged
+        self.assertEqual(mock_geocode.call_count, 0)  # unchanged
         self.assertEqual(mock_directions.call_count, 1)  # unchanged
 
     @patch("routes.views.directions")
@@ -194,7 +194,10 @@ class OptimizeAPITests(TestCase):
         mock_geocode.side_effect = ORSError("Geocode failed (503): unavailable")
         resp = self.client.post(
             "/api/routes/optimize/",
-            {"start": "Chicago, IL", "finish": "Dallas, TX"},
+            {
+                "start": "1600 Amphitheatre Pkwy, Mountain View, CA",
+                "finish": "Dallas, TX",
+            },
             format="json",
         )
         self.assertEqual(resp.status_code, 502)
@@ -314,6 +317,52 @@ class OptimizeAPITests(TestCase):
         self.assertEqual(resp.status_code, 200, resp.content)
         mock_geocode.assert_not_called()
         mock_directions.assert_called_once()
+
+    @patch("routes.views.directions")
+    @patch("routes.views.geocode")
+    def test_city_level_input_skips_ors_geocode(self, mock_geocode, mock_directions):
+        """City-level 'City, ST' inputs resolve via the bundled gazetteer."""
+        mock_directions.return_value = {
+            "geometry": fake_geometry(),
+            "distance_miles": 180.0,
+        }
+        resp = self.client.post(
+            "/api/routes/optimize/",
+            {"start": "Chicago, IL", "finish": "Indianapolis, IN"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        mock_geocode.assert_not_called()
+        mock_directions.assert_called_once()
+        # Gazetteer hits are not persisted to the ORS-only GeocodeCache.
+        self.assertEqual(GeocodeCache.objects.count(), 0)
+
+    @patch("routes.views.directions")
+    @patch("routes.views.geocode")
+    def test_specific_address_still_calls_ors_geocode(
+        self, mock_geocode, mock_directions
+    ):
+        """A street address is not city-level; it falls through to ORS geocode."""
+        mock_geocode.side_effect = [
+            (37.4220, -122.0841),  # 1600 Amphitheatre Pkwy, Mountain View, CA
+        ]
+        mock_directions.return_value = {
+            "geometry": fake_geometry(),
+            "distance_miles": 180.0,
+        }
+        resp = self.client.post(
+            "/api/routes/optimize/",
+            {
+                "start": "1600 Amphitheatre Pkwy, Mountain View, CA",
+                "finish": "Chicago, IL",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        # Only the address required geocoding; the city was gazetteer-resolved.
+        self.assertEqual(mock_geocode.call_count, 1)
+        mock_directions.assert_called_once()
+        self.assertEqual(GeocodeCache.objects.count(), 1)
 
     @patch("routes.views.directions")
     @patch("routes.views.geocode")

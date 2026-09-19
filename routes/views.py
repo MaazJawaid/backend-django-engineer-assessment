@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from .models import FuelStop, GeocodeCache, RouteCache
 from .serializers import OptimizeRouteSerializer
-from .services import fuel_optimizer, geo
+from .services import fuel_optimizer, geo, gazetteer
 from .services.ors_client import ORSError, directions, geocode
 
 logger = logging.getLogger(__name__)
@@ -28,10 +28,16 @@ def health(request):
 def _resolve_location(loc: dict) -> tuple[float, float, str]:
     """
     Resolve a validated location to (lat, lng, text_label).
-    Uses GeocodeCache then ORS for text locations.
+    Order: coords -> bundled gazetteer (city-level) -> GeocodeCache -> ORS.
     """
     if loc["type"] == "coords":
         return loc["lat"], loc["lng"], loc["value"]
+
+    # City-level inputs ("City, ST") resolve locally via the bundled gazetteer,
+    # avoiding an external geocoding call. Specific addresses fall through.
+    hit = gazetteer.resolve_city_state(loc["value"])
+    if hit is not None:
+        return hit[0], hit[1], loc["value"]
 
     query = loc["value"].strip().lower()
     cached = GeocodeCache.objects.filter(query=query).first()

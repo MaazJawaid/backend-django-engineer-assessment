@@ -4,7 +4,7 @@ Django REST API that plans a driving route between two USA locations and selects
 
 ## Features
 
-- Geocode start/finish (or accept lat/lng) via **OpenRouteService / HeiGIT**
+- Geocode start/finish (or accept lat/lng) — city-level `"City, ST"` inputs resolve locally via the bundled **GeoNames** gazetteer (0 external calls); specific street addresses use **OpenRouteService / HeiGIT**
 - One directions call per unique route (results cached in SQLite)
 - Match nearby truck stops from the provided OPIS fuel-price CSV
 - Greedy min-cost refueling algorithm (provably optimal for known prices)
@@ -159,11 +159,14 @@ This is the standard optimal strategy for the single-tank, known-prices gas-stat
 ## External APIs (rate limits)
 
 | Service | Host | Calls per optimize request |
-|---------|------|----------------------------|
-| Geocoding | `api.heigit.org/pelias/v1` | 0–2 (cached) |
+|---------|------|---------------------------|
+| Geocoding | `api.heigit.org/pelias/v1` | 0 for city-level `"City, ST"` (bundled gazetteer); 0–2 for specific street addresses (cached) |
 | Directions | `api.heigit.org/openrouteservice/v2/directions/driving-car/geojson` | 0–1 (cached) |
 
-Identical start/finish pairs reuse `GeocodeCache` and `RouteCache` — **zero** ORS calls on cache hits.
+City-level start/finish (e.g. `"Chicago, IL"`) resolve from the bundled
+GeoNames gazetteer in memory, so a cold city-level request makes **1** external
+call (directions only). Identical start/finish pairs reuse `GeocodeCache` and
+`RouteCache` — **zero** ORS calls on cache hits.
 
 Do **not** use the deprecated `api.openrouteservice.org` host (shut off 2026-09-28).
 
@@ -188,6 +191,7 @@ routes/
   services/
     ors_client.py    # HeiGIT API client
     geo.py           # haversine, corridor matching
+    gazetteer.py     # offline "City, ST" resolution via bundled GeoNames
     fuel_optimizer.py
   management/commands/
     build_gazetteer.py
