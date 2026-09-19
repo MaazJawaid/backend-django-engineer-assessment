@@ -13,7 +13,7 @@ Django REST API that plans a driving route between two USA locations and selects
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.12+ (Django 6.1 requires 3.12+)
 - Free [HeiGIT / OpenRouteService](https://account.heigit.org/) API key
 
 ## Setup
@@ -22,12 +22,12 @@ Django REST API that plans a driving route between two USA locations and selects
 # 1. Clone / enter the project directory
 cd backend-django-engineer-assessment
 
-# 2. Create a virtualenv (recommended)
-python -m venv .venv
-# Windows:
+# 2. Create a virtualenv with Python 3.12+ (Django 6.1 requires it)
+# Windows (if multiple Pythons installed):
+py -3.13 -m venv .venv
 .venv\Scripts\activate
 # macOS/Linux:
-source .venv/bin/activate
+# python3.13 -m venv .venv && source .venv/bin/activate
 
 # 3. Install dependencies
 pip install -r requirements.txt
