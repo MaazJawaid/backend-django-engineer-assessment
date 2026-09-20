@@ -36,3 +36,7 @@ htmlcov/
 *.egg-info/
 dist/
 build/
+tmp_*
+*.tmp
+*.bak
+Thumbs.db
