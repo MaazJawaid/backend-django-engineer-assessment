@@ -15,6 +15,7 @@ from .models import FuelStop, GeocodeCache, RouteCache
 from .serializers import OptimizeRouteSerializer
 from .services import fuel_optimizer, geo, gazetteer
 from .services.ors_client import ORSError, directions, geocode
+from .services.timing import get_timer
 
 logger = logging.getLogger(__name__)
 
@@ -24,24 +25,26 @@ def health(request):
     return Response({"status": "ok"})
 
 
-def _resolve_location(loc: dict) -> tuple[float, float, str]:
+def _resolve_location(loc: dict) -> tuple[float, float, str, str]:
     """
-    Resolve a validated location to (lat, lng, text_label).
+    Resolve a validated location to (lat, lng, text_label, source).
+
+    source is one of: coords | gazetteer | cache | ors
     Order: coords -> bundled gazetteer (city-level) -> GeocodeCache -> ORS.
     """
     if loc["type"] == "coords":
-        return loc["lat"], loc["lng"], loc["value"]
+        return loc["lat"], loc["lng"], loc["value"], "coords"
 
     # City-level inputs ("City, ST") resolve locally via the bundled gazetteer,
     # avoiding an external geocoding call. Specific addresses fall through.
     hit = gazetteer.resolve_city_state(loc["value"])
     if hit is not None:
-        return hit[0], hit[1], loc["value"]
+        return hit[0], hit[1], loc["value"], "gazetteer"
 
     query = loc["value"].strip().lower()
     cached = GeocodeCache.objects.filter(query=query).first()
     if cached:
-        return cached.latitude, cached.longitude, loc["value"]
+        return cached.latitude, cached.longitude, loc["value"], "cache"
 
     result = geocode(loc["value"])
     if result is None:
@@ -52,7 +55,7 @@ def _resolve_location(loc: dict) -> tuple[float, float, str]:
         query=query,
         defaults={"latitude": lat, "longitude": lng, "source": "ors"},
     )
-    return lat, lng, loc["value"]
+    return lat, lng, loc["value"], "ors"
 
 
 def _get_or_create_route(
@@ -62,7 +65,7 @@ def _get_or_create_route(
     finish_lng: float,
     start_text: str,
     finish_text: str,
-) -> RouteCache:
+) -> tuple[RouteCache, bool]:
     # Round coords slightly for cache key stability
     slat, slng = round(start_lat, 5), round(start_lng, 5)
     flat, flng = round(finish_lat, 5), round(finish_lng, 5)
@@ -74,10 +77,10 @@ def _get_or_create_route(
         finish_lng=flng,
     ).first()
     if cached:
-        return cached
+        return cached, True
 
     result = directions([(start_lat, start_lng), (finish_lat, finish_lng)])
-    return RouteCache.objects.create(
+    route = RouteCache.objects.create(
         start_lat=slat,
         start_lng=slng,
         finish_lat=flat,
@@ -87,6 +90,7 @@ def _get_or_create_route(
         start_text=start_text[:255],
         finish_text=finish_text[:255],
     )
+    return route, False
 
 
 def _stop_to_dict(matched: dict) -> dict:
@@ -104,16 +108,27 @@ def _stop_to_dict(matched: dict) -> dict:
     }
 
 
+def _maybe_timings(timer) -> dict | None:
+    if not timer.enabled:
+        return None
+    return timer.as_dict()
+
+
 class OptimizeRouteView(APIView):
     """POST /api/routes/optimize/ — plan a fuel-optimal route."""
 
     def post(self, request):
-        serializer = OptimizeRouteSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                {"error": "bad_request", "detail": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        timer = get_timer()
+
+        with timer.stage("validate"):
+            serializer = OptimizeRouteSerializer(data=request.data)
+            if not serializer.is_valid():
+                timer.finish()
+                resp = Response(
+                    {"error": "bad_request", "detail": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+                return timer.apply_to_response(resp)
 
         data = serializer.validated_data
         start_full_tank = data.get("start_full_tank", True)
@@ -124,109 +139,146 @@ class OptimizeRouteView(APIView):
         mpg = getattr(settings, "VEHICLE_MPG", 10.0)
 
         try:
-            start_lat, start_lng, start_text = _resolve_location(data["start"])
-            finish_lat, finish_lng, finish_text = _resolve_location(data["finish"])
+            with timer.stage("resolve_start"):
+                start_lat, start_lng, start_text, start_source = _resolve_location(
+                    data["start"]
+                )
+            with timer.stage("resolve_finish"):
+                finish_lat, finish_lng, finish_text, finish_source = _resolve_location(
+                    data["finish"]
+                )
         except ValueError as exc:
-            return Response(
+            timer.finish()
+            timer.log(logger, "optimize")
+            resp = Response(
                 {"error": "geocode_failed", "detail": str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+            return timer.apply_to_response(resp)
         except ORSError as exc:
             logger.exception("ORS geocode error")
-            return Response(
+            timer.finish()
+            timer.log(logger, "optimize")
+            resp = Response(
                 {"error": "ors_error", "detail": str(exc)},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+            return timer.apply_to_response(resp)
+
+        timer.meta["start_source"] = start_source
+        timer.meta["finish_source"] = finish_source
 
         try:
-            route = _get_or_create_route(
-                start_lat,
-                start_lng,
-                finish_lat,
-                finish_lng,
-                start_text,
-                finish_text,
-            )
+            with timer.stage("route_directions"):
+                route, cache_hit = _get_or_create_route(
+                    start_lat,
+                    start_lng,
+                    finish_lat,
+                    finish_lng,
+                    start_text,
+                    finish_text,
+                )
         except ORSError as exc:
             logger.exception("ORS directions error")
+            timer.finish()
+            timer.log(logger, "optimize")
             detail = str(exc)
             code = status.HTTP_422_UNPROCESSABLE_ENTITY
             if "404" in detail or "no route" in detail.lower():
-                return Response(
+                resp = Response(
                     {"error": "no_route", "detail": detail},
                     status=code,
                 )
-            return Response(
+                return timer.apply_to_response(resp)
+            resp = Response(
                 {"error": "ors_error", "detail": detail},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+            return timer.apply_to_response(resp)
 
+        timer.meta["route_cache_hit"] = cache_hit
         geometry = route.geometry
         distance_miles = route.distance_miles
+        timer.meta["geometry_points"] = len(geometry) if geometry else 0
 
         try:
             min_lat, min_lng, max_lat, max_lng = geo.bbox_of(
                 geometry, pad_miles=corridor_miles + 5.0
             )
         except ValueError:
-            return Response(
+            timer.finish()
+            timer.log(logger, "optimize")
+            resp = Response(
                 {"error": "invalid_route", "detail": "Route geometry is empty"},
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
+            return timer.apply_to_response(resp)
 
-        candidates = FuelStop.objects.filter(
-            latitude__isnull=False,
-            longitude__isnull=False,
-            latitude__gte=min_lat,
-            latitude__lte=max_lat,
-            longitude__gte=min_lng,
-            longitude__lte=max_lng,
-        )
+        with timer.stage("db_candidates"):
+            candidates = list(
+                FuelStop.objects.filter(
+                    latitude__isnull=False,
+                    longitude__isnull=False,
+                    latitude__gte=min_lat,
+                    latitude__lte=max_lat,
+                    longitude__gte=min_lng,
+                    longitude__lte=max_lng,
+                )
+            )
+        timer.meta["candidates"] = len(candidates)
 
-        matched = geo.match_stops_to_route(
-            geometry, list(candidates), corridor_miles=corridor_miles
-        )
-        stop_dicts = [_stop_to_dict(m) for m in matched]
+        with timer.stage("corridor_match"):
+            matched = geo.match_stops_to_route(
+                geometry, candidates, corridor_miles=corridor_miles
+            )
+            stop_dicts = [_stop_to_dict(m) for m in matched]
+        timer.meta["matched"] = len(matched)
 
-        result = fuel_optimizer.optimize(
-            stop_dicts,
-            total_distance_miles=distance_miles,
-            range_miles=range_miles,
-            mpg=mpg,
-            start_full_tank=start_full_tank,
-        )
+        with timer.stage("fuel_optimize"):
+            result = fuel_optimizer.optimize(
+                stop_dicts,
+                total_distance_miles=distance_miles,
+                range_miles=range_miles,
+                mpg=mpg,
+                start_full_tank=start_full_tank,
+            )
 
         if not result["feasible"]:
-            return Response(
-                {
+            with timer.stage("serialize_response"):
+                payload = {
                     "error": "infeasible",
                     "detail": result["reason"],
                     "route": {"type": "LineString", "coordinates": geometry},
                     "distance_miles": round(distance_miles, 2),
                     "route_id": route.pk,
-                },
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-
-        fuel_stops_out = []
-        for stop in result["fuel_stops"]:
-            fuel_stops_out.append(
-                {
-                    "opis_id": stop.get("opis_id"),
-                    "name": stop.get("name"),
-                    "city": stop.get("city"),
-                    "state": stop.get("state"),
-                    "latitude": stop.get("latitude"),
-                    "longitude": stop.get("longitude"),
-                    "mile_marker": stop.get("mile_marker"),
-                    "retail_price": f"{stop['retail_price']:.4f}",
-                    "gallons": f"{stop['gallons']:.2f}",
-                    "cost": f"{stop['cost']:.2f}",
                 }
-            )
+            timer.finish()
+            timings = _maybe_timings(timer)
+            if timings is not None:
+                payload["timings"] = timings
+            timer.log(logger, "optimize")
+            resp = Response(payload, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            return timer.apply_to_response(resp)
 
-        return Response(
-            {
+        with timer.stage("serialize_response"):
+            fuel_stops_out = []
+            for stop in result["fuel_stops"]:
+                fuel_stops_out.append(
+                    {
+                        "opis_id": stop.get("opis_id"),
+                        "name": stop.get("name"),
+                        "city": stop.get("city"),
+                        "state": stop.get("state"),
+                        "latitude": stop.get("latitude"),
+                        "longitude": stop.get("longitude"),
+                        "mile_marker": stop.get("mile_marker"),
+                        "retail_price": f"{stop['retail_price']:.4f}",
+                        "gallons": f"{stop['gallons']:.2f}",
+                        "cost": f"{stop['cost']:.2f}",
+                    }
+                )
+
+            payload = {
                 "route_id": route.pk,
                 "route": {"type": "LineString", "coordinates": geometry},
                 "distance_miles": round(distance_miles, 2),
@@ -241,12 +293,22 @@ class OptimizeRouteView(APIView):
                     "corridor_miles": corridor_miles,
                 },
             }
-        )
+        timer.finish()
+        timings = _maybe_timings(timer)
+        if timings is not None:
+            payload["timings"] = timings
+
+        timer.log(logger, "optimize")
+        resp = Response(payload)
+        return timer.apply_to_response(resp)
 
 
 def route_map(request, pk: int):
     """GET /api/routes/<id>/map/ — Leaflet HTML map of a cached route + fuel stops."""
-    route = get_object_or_404(RouteCache, pk=pk)
+    timer = get_timer()
+
+    with timer.stage("load_route"):
+        route = get_object_or_404(RouteCache, pk=pk)
 
     corridor = float(request.GET.get("corridor_miles", settings.DEFAULT_CORRIDOR_MILES))
     start_full_tank = request.GET.get("start_full_tank", "true").lower() in (
@@ -256,42 +318,62 @@ def route_map(request, pk: int):
     )
 
     geometry = route.geometry
-    min_lat, min_lng, max_lat, max_lng = geo.bbox_of(geometry, pad_miles=corridor + 5.0)
-    candidates = FuelStop.objects.filter(
-        latitude__isnull=False,
-        longitude__isnull=False,
-        latitude__gte=min_lat,
-        latitude__lte=max_lat,
-        longitude__gte=min_lng,
-        longitude__lte=max_lng,
-    )
-    matched = geo.match_stops_to_route(geometry, list(candidates), corridor_miles=corridor)
-    stop_dicts = [_stop_to_dict(m) for m in matched]
-    result = fuel_optimizer.optimize(
-        stop_dicts,
-        total_distance_miles=route.distance_miles,
-        range_miles=settings.VEHICLE_RANGE_MILES,
-        mpg=settings.VEHICLE_MPG,
-        start_full_tank=start_full_tank,
-    )
+    timer.meta["geometry_points"] = len(geometry) if geometry else 0
+    timer.meta["route_cache_hit"] = True
 
-    context = {
-        # Pass Python objects; template uses |json_script for safe embedding.
-        "route_data": geometry,
-        "stops_data": result["fuel_stops"],
-        "map_meta": {
-            "start_lat": route.start_lat,
-            "start_lng": route.start_lng,
-            "finish_lat": route.finish_lat,
-            "finish_lng": route.finish_lng,
-        },
-        "stop_count": len(result["fuel_stops"]),
-        "start_text": route.start_text or "Start",
-        "finish_text": route.finish_text or "Finish",
-        "distance_miles": round(route.distance_miles, 1),
-        "total_cost": f"{result['total_cost']:.2f}",
-        "total_gallons": f"{result['total_gallons']:.2f}",
-        "feasible": result["feasible"],
-        "reason": result.get("reason") or "",
-    }
-    return render(request, "routes/map.html", context)
+    min_lat, min_lng, max_lat, max_lng = geo.bbox_of(geometry, pad_miles=corridor + 5.0)
+
+    with timer.stage("db_candidates"):
+        candidates = list(
+            FuelStop.objects.filter(
+                latitude__isnull=False,
+                longitude__isnull=False,
+                latitude__gte=min_lat,
+                latitude__lte=max_lat,
+                longitude__gte=min_lng,
+                longitude__lte=max_lng,
+            )
+        )
+    timer.meta["candidates"] = len(candidates)
+
+    with timer.stage("corridor_match"):
+        matched = geo.match_stops_to_route(
+            geometry, candidates, corridor_miles=corridor
+        )
+        stop_dicts = [_stop_to_dict(m) for m in matched]
+    timer.meta["matched"] = len(matched)
+
+    with timer.stage("fuel_optimize"):
+        result = fuel_optimizer.optimize(
+            stop_dicts,
+            total_distance_miles=route.distance_miles,
+            range_miles=settings.VEHICLE_RANGE_MILES,
+            mpg=settings.VEHICLE_MPG,
+            start_full_tank=start_full_tank,
+        )
+
+    with timer.stage("render"):
+        context = {
+            # Pass Python objects; template uses |json_script for safe embedding.
+            "route_data": geometry,
+            "stops_data": result["fuel_stops"],
+            "map_meta": {
+                "start_lat": route.start_lat,
+                "start_lng": route.start_lng,
+                "finish_lat": route.finish_lat,
+                "finish_lng": route.finish_lng,
+            },
+            "stop_count": len(result["fuel_stops"]),
+            "start_text": route.start_text or "Start",
+            "finish_text": route.finish_text or "Finish",
+            "distance_miles": round(route.distance_miles, 1),
+            "total_cost": f"{result['total_cost']:.2f}",
+            "total_gallons": f"{result['total_gallons']:.2f}",
+            "feasible": result["feasible"],
+            "reason": result.get("reason") or "",
+        }
+        response = render(request, "routes/map.html", context)
+
+    timer.finish()
+    timer.log(logger, "map")
+    return timer.apply_to_response(response)

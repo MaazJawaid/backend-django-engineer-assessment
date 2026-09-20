@@ -22,6 +22,9 @@ ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split("
 
 ORS_API_KEY = os.getenv("ORS_API_KEY", "")
 
+# Per-stage request timings (JSON body + Server-Timing header + logs)
+INCLUDE_TIMINGS = os.getenv("INCLUDE_TIMINGS", "False").lower() in ("1", "true", "yes")
+
 # Vehicle defaults (assignment constraints)
 VEHICLE_RANGE_MILES = 500.0
 VEHICLE_MPG = 10.0

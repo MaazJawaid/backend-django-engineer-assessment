@@ -123,6 +123,39 @@ HTML page with Leaflet + Esri World Street Map tiles showing the route polyline 
 
 Basemap tiles do **not** use `ORS_API_KEY` — HeiGIT/ORS covers geocoding and directions only. The map page loads free Esri tiles in the browser (no extra key).
 
+## Observability / timings
+
+Set `INCLUDE_TIMINGS=True` in `.env` (restart the server) to measure each pipeline stage.
+
+When enabled, optimize responses include a `timings` object:
+
+```json
+"timings": {
+  "unit": "ms",
+  "stages": {
+    "validate": 1.2,
+    "resolve_start": 0.4,
+    "resolve_finish": 0.3,
+    "route_directions": 12.5,
+    "db_candidates": 45.0,
+    "corridor_match": 6200.0,
+    "fuel_optimize": 8.0,
+    "serialize_response": 15.0,
+    "total": 6283.0
+  },
+  "meta": {
+    "route_cache_hit": true,
+    "start_source": "gazetteer",
+    "finish_source": "gazetteer",
+    "candidates": 842,
+    "matched": 117,
+    "geometry_points": 4821
+  }
+}
+```
+
+Responses also send a W3C **`Server-Timing`** header (visible in Postman Headers / browser DevTools Network). Map pages use the header + server logs only (no JSON body). Set `INCLUDE_TIMINGS=False` to disable all of this.
+
 ## Example curl
 
 ```bash

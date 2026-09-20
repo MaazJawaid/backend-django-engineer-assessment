@@ -525,3 +525,151 @@ class OptimizeAPITests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"leaflet", resp.content.lower())
+
+
+class TimingAPITests(TestCase):
+    """Stage timings gated by INCLUDE_TIMINGS."""
+
+    def setUp(self):
+        self.client = APIClient()
+        FuelStop.objects.create(
+            opis_id=1,
+            name="Cheap Stop",
+            address="I-65",
+            city="Lafayette",
+            state="IN",
+            retail_price=Decimal("3.0000"),
+            latitude=40.4167,
+            longitude=-86.8753,
+            geocode_source="gazetteer",
+        )
+
+    @patch("routes.views.directions")
+    @patch("routes.views.geocode")
+    def test_timings_included_when_enabled(self, mock_geocode, mock_directions):
+        mock_directions.return_value = {
+            "geometry": fake_geometry(),
+            "distance_miles": 180.0,
+        }
+        with self.settings(INCLUDE_TIMINGS=True):
+            resp = self.client.post(
+                "/api/routes/optimize/",
+                {
+                    "start": "Chicago, IL",
+                    "finish": "Indianapolis, IN",
+                    "corridor_miles": 20,
+                },
+                format="json",
+            )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        body = resp.json()
+        self.assertIn("timings", body)
+        timings = body["timings"]
+        self.assertEqual(timings["unit"], "ms")
+        stages = timings["stages"]
+        for key in (
+            "validate",
+            "resolve_start",
+            "resolve_finish",
+            "route_directions",
+            "db_candidates",
+            "corridor_match",
+            "fuel_optimize",
+            "serialize_response",
+            "total",
+        ):
+            self.assertIn(key, stages)
+            self.assertIsInstance(stages[key], (int, float))
+        meta = timings["meta"]
+        self.assertIn("route_cache_hit", meta)
+        self.assertEqual(meta["start_source"], "gazetteer")
+        self.assertEqual(meta["finish_source"], "gazetteer")
+        self.assertIn("candidates", meta)
+        self.assertIn("matched", meta)
+        self.assertIn("geometry_points", meta)
+        self.assertIn("Server-Timing", resp)
+        self.assertIn("total;dur=", resp["Server-Timing"])
+        self.assertIn("corridor_match;dur=", resp["Server-Timing"])
+
+    @patch("routes.views.directions")
+    @patch("routes.views.geocode")
+    def test_timings_omitted_when_disabled(self, mock_geocode, mock_directions):
+        mock_directions.return_value = {
+            "geometry": fake_geometry(),
+            "distance_miles": 180.0,
+        }
+        with self.settings(INCLUDE_TIMINGS=False):
+            resp = self.client.post(
+                "/api/routes/optimize/",
+                {
+                    "start": "Chicago, IL",
+                    "finish": "Indianapolis, IN",
+                    "corridor_miles": 20,
+                },
+                format="json",
+            )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        body = resp.json()
+        self.assertNotIn("timings", body)
+        self.assertNotIn("Server-Timing", resp)
+
+    @patch("routes.views.directions")
+    @patch("routes.views.geocode")
+    def test_infeasible_includes_timings_when_enabled(
+        self, mock_geocode, mock_directions
+    ):
+        FuelStop.objects.all().delete()
+        mock_directions.return_value = {
+            "geometry": [[-87.6298, 41.8781], [-96.7970, 32.7767]],
+            "distance_miles": 1000.0,
+        }
+        with self.settings(INCLUDE_TIMINGS=True):
+            resp = self.client.post(
+                "/api/routes/optimize/",
+                {
+                    "start": "Chicago, IL",
+                    "finish": "Dallas, TX",
+                    "corridor_miles": 5,
+                },
+                format="json",
+            )
+        self.assertEqual(resp.status_code, 422)
+        body = resp.json()
+        self.assertEqual(body["error"], "infeasible")
+        self.assertIn("timings", body)
+        self.assertIn("total", body["timings"]["stages"])
+        self.assertIn("Server-Timing", resp)
+
+    def test_map_server_timing_when_enabled(self):
+        route = RouteCache.objects.create(
+            start_lat=41.8781,
+            start_lng=-87.6298,
+            finish_lat=39.7684,
+            finish_lng=-86.1581,
+            geometry=fake_geometry(),
+            distance_miles=180.0,
+            start_text="Chicago, IL",
+            finish_text="Indianapolis, IN",
+        )
+        with self.settings(INCLUDE_TIMINGS=True):
+            resp = self.client.get(f"/api/routes/{route.pk}/map/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Server-Timing", resp)
+        self.assertIn("corridor_match;dur=", resp["Server-Timing"])
+        self.assertIn("total;dur=", resp["Server-Timing"])
+
+    def test_map_no_server_timing_when_disabled(self):
+        route = RouteCache.objects.create(
+            start_lat=41.8781,
+            start_lng=-87.6298,
+            finish_lat=39.7684,
+            finish_lng=-86.1581,
+            geometry=fake_geometry(),
+            distance_miles=180.0,
+            start_text="Chicago, IL",
+            finish_text="Indianapolis, IN",
+        )
+        with self.settings(INCLUDE_TIMINGS=False):
+            resp = self.client.get(f"/api/routes/{route.pk}/map/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("Server-Timing", resp)
