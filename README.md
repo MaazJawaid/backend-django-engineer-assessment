@@ -199,10 +199,27 @@ This is the standard optimal strategy for the single-tank, known-prices gas-stat
 | Directions | `api.heigit.org/openrouteservice/v2/directions/driving-car/geojson` | 0–1 (cached) |
 | Map basemap tiles | Esri World Street Map (browser only) | Not counted as ORS calls; no API key |
 
-City-level start/finish (e.g. `"Chicago, IL"`) resolve from the bundled
-GeoNames gazetteer in memory, so a cold city-level request makes **1** external
-call (directions only). Identical start/finish pairs reuse `GeocodeCache` and
-`RouteCache` — **zero** ORS calls on cache hits.
+### ORS calls by case
+
+How many HeiGIT / OpenRouteService requests a single `POST /api/routes/optimize/` makes:
+
+| Case | Example | Geocode | Directions | **Total ORS** |
+|------|---------|---------|------------|---------------|
+| Cold — city → city | `"Chicago, IL"` → `"Dallas, TX"` (first time) | 0 (gazetteer) | 1 | **1** |
+| Warm — same cities again | identical request (route cached) | 0 | 0 | **0** |
+| Cold — lat/lng → lat/lng | `{lat, lng}` both ends (first time) | 0 | 1 | **1** |
+| Warm — same coords again | identical coords (route cached) | 0 | 0 | **0** |
+| Cold — street address → city | address + `"Chicago, IL"` (first time) | 1 | 1 | **2** |
+| Warm — same address again | address in `GeocodeCache`, route cached | 0 | 0 | **0** |
+| Cold — two street addresses | both ends are specific addresses (first time) | 2 | 1 | **3** |
+| Warm — same two addresses | both geocodes + route cached | 0 | 0 | **0** |
+| Mixed — new cities, route already cached* | same coords as a prior trip, different text | 0 | 0 | **0** |
+| Map page | `GET /api/routes/{id}/map/` | 0 | 0 | **0** |
+
+\*Route cache keys on rounded lat/lng, not the original text label.
+
+City-level start/finish resolve from the bundled GeoNames gazetteer in memory.
+Identical start/finish pairs reuse `GeocodeCache` and `RouteCache`.
 
 Do **not** use the deprecated `api.openrouteservice.org` host (shut off 2026-09-28).
 
