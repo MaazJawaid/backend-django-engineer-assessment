@@ -15,8 +15,7 @@ class FuelStop(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["latitude"]),
-            models.Index(fields=["longitude"]),
+            models.Index(fields=["latitude", "longitude"]),
         ]
         db_table = "fuel_stop"
 

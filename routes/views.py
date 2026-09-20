@@ -96,15 +96,15 @@ def _get_or_create_route(
 def _stop_to_dict(matched: dict) -> dict:
     stop = matched["stop"]
     return {
-        "opis_id": stop.opis_id,
-        "name": stop.name,
-        "city": stop.city,
-        "state": stop.state,
-        "latitude": stop.latitude,
-        "longitude": stop.longitude,
+        "opis_id": stop["opis_id"],
+        "name": stop["name"],
+        "city": stop["city"],
+        "state": stop["state"],
+        "latitude": stop["latitude"],
+        "longitude": stop["longitude"],
         "mile_marker": matched["mile_marker"],
-        "retail_price": float(stop.retail_price),
-        "address": stop.address,
+        "retail_price": float(stop["retail_price"]),
+        "address": stop["address"],
     }
 
 
@@ -223,6 +223,16 @@ class OptimizeRouteView(APIView):
                     latitude__lte=max_lat,
                     longitude__gte=min_lng,
                     longitude__lte=max_lng,
+                ).values(
+                    "id",
+                    "opis_id",
+                    "name",
+                    "address",
+                    "city",
+                    "state",
+                    "retail_price",
+                    "latitude",
+                    "longitude",
                 )
             )
         timer.meta["candidates"] = len(candidates)
@@ -332,6 +342,16 @@ def route_map(request, pk: int):
                 latitude__lte=max_lat,
                 longitude__gte=min_lng,
                 longitude__lte=max_lng,
+            ).values(
+                "id",
+                "opis_id",
+                "name",
+                "address",
+                "city",
+                "state",
+                "retail_price",
+                "latitude",
+                "longitude",
             )
         )
     timer.meta["candidates"] = len(candidates)

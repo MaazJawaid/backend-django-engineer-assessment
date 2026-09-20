@@ -190,7 +190,7 @@ def match_stops_to_route(
 
     Args:
         route_coords: GeoJSON LineString coordinates [[lng, lat], ...]
-        stops: iterable of objects with .latitude and .longitude
+        stops: iterable of dicts with "latitude" and "longitude" keys
         corridor_miles: max off-route distance to include a stop
 
     Returns:
@@ -220,8 +220,8 @@ def match_stops_to_route(
 
     matched: list[dict] = []
     for stop in stops:
-        slat = stop.latitude
-        slng = stop.longitude
+        slat = stop["latitude"]
+        slng = stop["longitude"]
         if slat is None or slng is None:
             continue
 

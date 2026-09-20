@@ -21,13 +21,9 @@ def make_stop(marker, price, opis_id=1, **extra):
     return base
 
 
-class FakeStop:
-    """Lightweight stand-in for FuelStop with latitude/longitude attributes."""
-
-    def __init__(self, lat, lng, name="S"):
-        self.latitude = lat
-        self.longitude = lng
-        self.name = name
+def FakeStop(lat, lng, name="S"):
+    """Lightweight stand-in for a FuelStop .values() row: a dict with lat/lng keys."""
+    return {"latitude": lat, "longitude": lng, "name": name}
 
 
 def fake_geometry():
