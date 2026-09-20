@@ -1,0 +1,202 @@
+[
+  {
+    "opis_id": 71032,
+    "name": "MAVERIK COUNTRY STORE #416",
+    "address": "US-50 & US-95",
+    "city": "Fallon",
+    "state": "NV",
+    "latitude": 39.476713,
+    "longitude": -118.782418,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 6944,
+    "name": "CROSSROADS TRUCK STOP",
+    "address": "I-82, EXIT 1 & US-730",
+    "city": "Umatilla",
+    "state": "OR",
+    "latitude": 45.917917,
+    "longitude": -119.324435,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 1461,
+    "name": "CIRCLE K #2705370",
+    "address": "I-26, EXIT 15 & US-176",
+    "city": "Inman",
+    "state": "SC",
+    "latitude": 35.061532,
+    "longitude": -81.998497,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 72192,
+    "name": "MASSEY FUEL",
+    "address": "I-95, EXIT 30",
+    "city": "Bridgeport",
+    "state": "CT",
+    "latitude": 41.188221,
+    "longitude": -73.187333,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 64712,
+    "name": "SUNSTOP #650",
+    "address": "US-431 & SR-210",
+    "city": "Dothan",
+    "state": "AL",
+    "latitude": null,
+    "longitude": null,
+    "geocoding_source": "none"
+  },
+  {
+    "opis_id": 63931,
+    "name": "LOVES TRAVEL STOP #371",
+    "address": "I-95, EXIT 190",
+    "city": "Dillon",
+    "state": "SC",
+    "latitude": 34.418767,
+    "longitude": -79.415922,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 63565,
+    "name": "LOVES TRAVEL STOP #296",
+    "address": "I-8, EXIT 115 & SR-85",
+    "city": "Gila Bend",
+    "state": "AZ",
+    "latitude": 33.539534,
+    "longitude": -112.373957,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 9383,
+    "name": "PILOT TRAVEL CENTERS #285",
+    "address": "I-70, EXIT 126 & SR-37",
+    "city": "Hebron",
+    "state": "OH",
+    "latitude": 39.961076,
+    "longitude": -82.484687,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 72118,
+    "name": "GAS N WASH",
+    "address": "I-355 & SR-7",
+    "city": "HOMER GLEN",
+    "state": "IL",
+    "latitude": 41.598711,
+    "longitude": -88.006506,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 6391,
+    "name": "TOOT N TOTUM #106",
+    "address": "US-287",
+    "city": "Dumas",
+    "state": "TX",
+    "latitude": 35.865392,
+    "longitude": -101.962718,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 71413,
+    "name": "Flyers #3216",
+    "address": "US 60, Exit 194",
+    "city": "Apache Junction",
+    "state": "AZ",
+    "latitude": 32.73093,
+    "longitude": -117.206553,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 72182,
+    "name": "LULING MINI MART",
+    "address": "I-10 Exit 628 & SR-80",
+    "city": "Luling",
+    "state": "TX",
+    "latitude": 29.680898,
+    "longitude": -97.647499,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 69932,
+    "name": "CIRCLE K #2741847",
+    "address": "SR-16",
+    "city": "San Antonio",
+    "state": "TX",
+    "latitude": 29.418396,
+    "longitude": -98.677638,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 5649,
+    "name": "Fast Stop",
+    "address": "I-10, EXIT 182 & SR-22",
+    "city": "Sorrento",
+    "state": "LA",
+    "latitude": 30.184065,
+    "longitude": -90.867108,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 70472,
+    "name": "SHELL/ONE9 #1304",
+    "address": "I-820 & CR-156",
+    "city": "Fort Worth",
+    "state": "TX",
+    "latitude": 32.814007,
+    "longitude": -97.409693,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 67777,
+    "name": "CIRCLE K #2721270",
+    "address": "I-95, EXIT 358B, SR-105",
+    "city": "Jacksonville",
+    "state": "FL",
+    "latitude": 30.195825,
+    "longitude": -81.550967,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 1834,
+    "name": "PUMP N PANTRY #15",
+    "address": "I-20, EXIT 617 & US-59",
+    "city": "Marshall",
+    "state": "TX",
+    "latitude": 32.488931,
+    "longitude": -94.358712,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 1661,
+    "name": "CHEVRON",
+    "address": "I-20, EXIT 101 & SR-151",
+    "city": "Calhoun",
+    "state": "LA",
+    "latitude": 32.514968,
+    "longitude": -92.353924,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 6033,
+    "name": "EMERY'S",
+    "address": "US-54",
+    "city": "Deerfield",
+    "state": "MO",
+    "latitude": 39.01511,
+    "longitude": -77.16359,
+    "geocoding_source": "ors"
+  },
+  {
+    "opis_id": 63349,
+    "name": "FLYING J TRAVEL PLAZA #662",
+    "address": "I-24, EXIT 86",
+    "city": "Oak Grove",
+    "state": "KY",
+    "latitude": 37.34421,
+    "longitude": -86.75471,
+    "geocoding_source": "ors"
+  }
+]

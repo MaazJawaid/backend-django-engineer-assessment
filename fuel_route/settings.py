@@ -20,7 +20,14 @@ DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
-ORS_API_KEY = os.getenv("ORS_API_KEY", "")
+# Prefer ORS_API_KEY from the environment; fall back to a shared demo key so
+# reviewers can run the app without creating a HeiGIT account. Override via
+# .env if you prefer your own key (recommended for anything beyond local review).
+_DEFAULT_ORS_API_KEY = (
+    "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjBhZjMzMGFhNDBjOTQ0"
+    "M2RiNDA3NjMxZTNiNmUwMmQ2IiwiaCI6Im11cm11cjY0In0="
+)
+ORS_API_KEY = os.getenv("ORS_API_KEY") or _DEFAULT_ORS_API_KEY
 
 # Per-stage request timings (JSON body + Server-Timing header + logs)
 INCLUDE_TIMINGS = os.getenv("INCLUDE_TIMINGS", "False").lower() in ("1", "true", "yes")

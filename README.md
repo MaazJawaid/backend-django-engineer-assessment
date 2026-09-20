@@ -14,7 +14,7 @@ Django REST API that plans a driving route between two USA locations and selects
 ## Requirements
 
 - Python 3.12+ (Django 6.1 requires 3.12+)
-- Free [HeiGIT / OpenRouteService](https://account.heigit.org/) API key
+- HeiGIT / OpenRouteService is used for street-address geocoding and directions — **no account needed** (bundled demo key; override optional)
 
 ## Setup
 
@@ -32,10 +32,10 @@ py -3.13 -m venv .venv
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Configure environment
+# 4. Configure environment (optional)
 copy .env.example .env   # Windows
 # cp .env.example .env   # macOS/Linux
-# Edit .env and set ORS_API_KEY=your_key
+# ORS_API_KEY is optional — see "API key" below.
 
 # 5. Migrate & load data
 python manage.py migrate
@@ -48,6 +48,12 @@ python manage.py load_fuel_stops
 # 6. Run
 python manage.py runserver
 ```
+
+### API key (for reviewers)
+
+`ORS_API_KEY` may be set in `.env`, but it is **not required**. If the env var is missing or empty, the app falls back to a bundled demo HeiGIT key in `fuel_route/settings.py`.
+
+This is intentional so reviewers can clone, migrate, load data, and hit the optimize/map endpoints **without signing up at [account.heigit.org](https://account.heigit.org/)**. Prefer your own free key for anything beyond short local review (shared demo keys can hit rate limits).
 
 ## API
 
